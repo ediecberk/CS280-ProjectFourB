@@ -33,26 +33,29 @@ except ImportError:
 
 
 # Fridge front / microwave glass corners, as fractions of the photo. TL, TR, BR, BL.
-RECT_QUADS = {
-    "fridge": np.array(
-        [
-            [0.271, 0.138],
-            [0.757, 0.220],
-            [0.634, 0.870],
-            [0.310, 0.887],
-        ],
-        dtype=np.float64,
-    ),
-    "microwave": np.array(
-        [
-            [0.300, 0.556],
-            [0.706, 0.417],
-            [0.691, 0.644],
-            [0.316, 0.785],
-        ],
-        dtype=np.float64,
-    ),
+# Prefer code/rect_quads.json from: python code/pick_corners.py
+_RECT_DEFAULT = {
+    "fridge": [
+        [0.271, 0.138],
+        [0.757, 0.220],
+        [0.634, 0.870],
+        [0.310, 0.887],
+    ],
+    "microwave": [
+        [0.300, 0.556],
+        [0.706, 0.417],
+        [0.691, 0.644],
+        [0.316, 0.785],
+    ],
 }
+_rect_path = Path(__file__).resolve().parent / "rect_quads.json"
+if _rect_path.exists():
+    RECT_QUADS = {
+        name: np.asarray(pts, dtype=np.float64)
+        for name, pts in json.loads(_rect_path.read_text()).items()
+    }
+else:
+    RECT_QUADS = {name: np.asarray(pts, dtype=np.float64) for name, pts in _RECT_DEFAULT.items()}
 
 SCENES = ("courtyard", "livingroom", "laundry")
 PORTFOLIO = Path("/Users/ethandiec/Desktop/CS280/ui/public/p4")
@@ -68,6 +71,14 @@ def load_font(size):
         if Path(path).exists():
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
+
+
+def resolve_image(folder, stem):
+    for ext in (".jpg", ".jpeg", ".png", ".heic", ".HEIC"):
+        path = folder / f"{stem}{ext}"
+        if path.exists():
+            return path
+    raise FileNotFoundError(folder / stem)
 
 
 def load_image(path, max_side):
@@ -425,7 +436,7 @@ def choose_focal_length(pairs, shapes):
 
 def build_scene(name, max_side, out_dir):
     folder = ROOT / "images" / name
-    images = {side: load_image(folder / f"{side}.heic", max_side) for side in ("left", "center", "right")}
+    images = {side: load_image(resolve_image(folder, side), max_side) for side in ("left", "center", "right")}
     print(f"[{name}] matching")
     left = fit_pair(images["left"], images["center"])
     right = fit_pair(images["right"], images["center"])
@@ -487,7 +498,7 @@ def cylinder_shifts(left, right, images, f):
 
 
 def rectify_one(name, max_side, out_dir):
-    path = ROOT / "images" / "rectify" / f"{name}.heic"
+    path = resolve_image(ROOT / "images" / "rectify", name)
     image = load_image(path, max_side)
     quad = quad_pixels(image, RECT_QUADS[name])
     print(f"[rectify {name}]")
@@ -555,7 +566,7 @@ def main():
     if args.only in ("all", "cylinder"):
         if "courtyard" not in scenes:
             images = {
-                side: load_image(ROOT / "images" / "courtyard" / f"{side}.heic", args.max_side)
+                side: load_image(resolve_image(ROOT / "images" / "courtyard", side), args.max_side)
                 for side in ("left", "center", "right")
             }
             left = fit_pair(images["left"], images["center"])
