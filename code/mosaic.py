@@ -83,6 +83,7 @@ def ransac_homography(src, dst, threshold=4.0, iterations=2500, seed=0):
         raise ValueError("need at least 4 correspondences")
     rng = np.random.default_rng(seed)
     best_inliers = None
+    best_H = None
     best_count = -1
     for _ in range(iterations):
         idx = rng.choice(n, size=4, replace=False)
@@ -96,14 +97,21 @@ def ransac_homography(src, dst, threshold=4.0, iterations=2500, seed=0):
         if count > best_count:
             best_count = count
             best_inliers = inliers
+            best_H = H
     if best_inliers is None or best_count < 4:
         raise RuntimeError("RANSAC did not find a homography")
-    H = computeH(src[best_inliers], dst[best_inliers])
+    try:
+        H = computeH(src[best_inliers], dst[best_inliers])
+    except np.linalg.LinAlgError:
+        H = best_H
     err = reprojection_error(src, dst, H)
     inliers = np.isfinite(err) & (err < threshold)
     if int(inliers.sum()) >= 4:
-        H = computeH(src[inliers], dst[inliers])
-        err = reprojection_error(src, dst, H)
+        try:
+            H = computeH(src[inliers], dst[inliers])
+            err = reprojection_error(src, dst, H)
+        except np.linalg.LinAlgError:
+            pass
     return H, inliers, err
 
 
